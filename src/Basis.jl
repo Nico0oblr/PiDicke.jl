@@ -14,7 +14,7 @@ function dicke_subspaces(N::Integer)
 end
 
 """Multiplicity-free direct sum of all two-level Dicke sectors."""
-dicke_space(N::Integer) = directsum(dicke_subspaces(N)...)
+dicke_space(N::Integer) = SumBasis(dicke_subspaces(N))
 dicke_space(model::DickeModel) = dicke_space(model.N)
 
 function block_ranges(space::SumBasis)

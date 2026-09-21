@@ -18,6 +18,7 @@ include("Coherences.jl")
 include("FullMaster.jl")
 include("Cavity.jl")
 include("Spectra.jl")
+include("Experimental.jl")
 
 export AbstractDickeRepresentation,
        TrajectoryRepresentation,

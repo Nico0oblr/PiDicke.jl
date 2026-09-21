@@ -1,8 +1,9 @@
 # PIDicke.jl
 
 Two-level permutation-invariant open-system calculations in the Dicke basis.
-The package collects the tested implementations that previously lived across
-`SuperradiantLasing`, `SpinMax/FullPerm.jl`, and the cavity notebooks.
+This is the group reference implementation: it collects the tested code that
+previously lived across `SuperradiantLasing`, `SpinMax/FullPerm.jl`, and the
+cavity notebooks behind one set of conventions.
 
 The same physical model is available at several computational levels:
 
@@ -17,6 +18,37 @@ The same physical model is available at several computational levels:
 The efficient population and coherence representations currently use integer
 `(S,M)` labels and therefore require even `N`. The full `SumBasis`
 representation supports even and odd `N`.
+
+## Conventions
+
+- `N` is the number of identical two-level systems and `S` is total spin. For
+  the efficient even-`N` representations, `S = 0,1,...,N/2` and
+  `M = -S,-S+1,...,S`.
+- Population vectors obey `dp/dt = G*p`. A column of `G` is a source state and
+  a row is a destination state; consequently a closed generator has zero
+  column sums.
+- The five fields of `DickeModel` are nonnegative Lindblad rates. The full
+  representation uses the QuantumOptics.jl convention
+  `rate * (J*rho*J' - (J'*J*rho + rho*J'*J)/2)`. The population and trajectory
+  event rates are the same rate multiplied by the squared Dicke amplitude.
+- `collective_decay` and `collective_pump` multiply `S-` and `S+`. The three
+  local rates are represented by the PI transitions between neighboring total
+  spin sectors used in the original code.
+- The first-order coherence label `(S,M)` denotes
+  `|S,M-1><S,M|`. Correlations are read out with the matrix element of `S-`.
+- The full density representation keeps one representative of each total-spin
+  sector. Thus `d_N_J = 1` is an operational multiplicity convention, not the
+  physical combinatorial multiplicity of that sector.
+- Units are arbitrary but must be consistent. With rates in inverse time, all
+  evolution times use the corresponding time unit. QuantumOptics.jl uses
+  `hbar = 1`.
+- `FockBasis(cutoff)` contains occupations `0:cutoff`, so the cavity dimension
+  is `cutoff + 1`.
+- `kappa` is the coefficient of the standard dissipator `D[a]`. Photon number
+  therefore decays at `kappa`, while the empty-cavity field amplitude decays at
+  `kappa/2`. On resonance, eliminating a bad cavity with Hamiltonian coupling
+  `g * (S+*a + S-*a')` gives the collective spin decay rate
+  `Gamma_c = 4g^2/kappa`.
 
 ## Installation
 
@@ -61,9 +93,9 @@ For stochastic dynamics:
 times, states = run_population_trajectory(model; tmax = 5.0)
 ```
 
-Burn-in and ergodic stationary samplers from the research scripts are
-deliberately not part of this package. A steady distribution is obtained from
-the sparse population generator.
+The exact sparse steady distribution is available through
+`population_steady_state`. For large systems, the original one-trajectory
+ergodic sampler is available through `ergodic_population_samples`.
 
 ## First-order coherence sector
 
@@ -112,6 +144,43 @@ result.correlation
 The stages remain independently accessible through
 `ergodic_population_samples` and
 `simulate_first_order_correlation_from_samples`.
+
+## Experimental active population region
+
+The large-`N` active-region steady-state calculation is available under the
+explicitly experimental namespace `PIDicke.Experimental`. Its region shape is
+the implementation that worked in `ActiveSpacePlots.ipynb`: the extrema of the
+ergodic samples define a rectangle in `(S,M)`, the same padding is added on all
+sides, and that rectangle is intersected with the Dicke triangle. It does not
+use outgoing-transition shells.
+
+```julia
+const Active = PIDicke.Experimental
+
+samples = ergodic_population_samples(
+    model,
+    10_000;
+    equilibration_time = 20.0,
+    sampling_window = 60.0,
+    rng,
+)
+
+result = Active.active_region_steady_state(
+    model,
+    samples;
+    padding = 50,
+    dt = 1e3,
+    nsteps = 5,
+)
+```
+
+The restricted boundary is closed, the initial population is the normalized
+sample histogram, and the steady state is approached through repeated implicit
+Euler steps. Inspect `result.diagnostics.mean_leakage` when deciding whether
+the padding is large enough. `dt` uses the model's time units: the notebooks
+used `1e3` when the reference decay rate was one and `1e3 / Γ` when rates
+were expressed using an explicit `Γ`. This API is intentionally not exported
+from the top-level module while the region geometry is still being developed.
 
 ## Full density matrix
 
@@ -173,8 +242,23 @@ modified by a downstream project.
 - Full operators: `SpinMax/FullPerm.jl`
 - Cavity construction: `LasingQuantumOpticsImplementation.ipynb`
 - Spectral utilities: `SuperradiantLasing/Spectrum.jl`
+- Experimental active region and implicit-Euler iteration:
+  `ActiveSpacePlots.ipynb` and `SteadyState.jl`
 
 Plotting and mean-field comparisons remain outside the core package.
+
+## Numerical validation
+
+Small deterministic regression tests extract the population and first-order
+coherence blocks from the full PI Liouvillian and compare them element by
+element with the efficient generators. Both comparisons currently agree at
+machine precision. A separate `N=1` regression checks that the explicit cavity
+approaches collective spin decay with `Gamma_c = 4g^2/kappa` in the bad-cavity
+limit.
+
+The executable programs in `examples/validation` expose the same comparisons,
+including propagated states, a sweep of `kappa/g`, and convergence of an
+ergodic histogram toward the exact population steady state.
 
 ## Examples
 

@@ -1,6 +1,6 @@
 using LinearAlgebra
 using PIDicke
-using QuantumOptics: dm
+using QuantumOptics: dm, fockstate, ⊗
 using Random
 using Test
 
@@ -143,4 +143,55 @@ using Test
         @test length(frequencies) == length(spectrum)
         @test isapprox(spectrum_fwhm(frequencies, spectrum), 1.0; rtol = 0.05)
     end
+
+    @testset "experimental padded active region" begin
+        Active = PIDicke.Experimental
+        model = DickeModel(
+            6;
+            collective_decay = 1.0,
+            local_decay = 0.1,
+            local_pump = 0.2,
+            local_dephasing = 0.05,
+        )
+
+        samples = ErgodicDickeSamples(
+            [2, 3, 2],
+            [-1, 1, 0],
+            [1.0, 2.0, 3.0],
+        )
+        active_basis = Active.padded_sample_basis(model, samples; padding = 1)
+        @test first(active_basis) == (1, -1)
+        @test last(active_basis) == (3, 2)
+        @test all(((S, M),) -> 1 <= S <= 3 && -2 <= M <= 2 && abs(M) <= S, active_basis)
+
+        restricted = Active.active_population_generator(model, active_basis)
+        @test maximum(abs, vec(sum(restricted.generator; dims = 1))) < 1e-12
+        @test any(restricted.leakage .> 0)
+
+        states, indices, generator = population_generator(model)
+        full_samples = ErgodicDickeSamples(
+            first.(states),
+            last.(states),
+            zeros(length(states)),
+        )
+        full_result = Active.active_region_steady_state(
+            model,
+            full_samples;
+            padding = 0,
+            dt = 1e4,
+            nsteps = 5,
+        )
+        @test full_result.basis == states
+        @test full_result.indices == indices
+        @test full_result.generator == generator
+        @test isapprox(sum(full_result.steady), 1; atol = 1e-12)
+        @test norm(generator * full_result.steady, 1) < 1e-8
+        @test isapprox(
+            full_result.steady,
+            population_steady_state(generator);
+            atol = 1e-8,
+        )
+    end
+
+    include("validation.jl")
 end

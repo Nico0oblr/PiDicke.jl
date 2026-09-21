@@ -78,6 +78,9 @@ function collective_operator(space::SumBasis, component::Symbol)
     else
         throw(ArgumentError("unknown collective component $component"))
     end
+    if length(operators) == 1
+        return SparseOperator(space, sparse(first(operators).data))
+    end
     return directsum(operators...)
 end
 
@@ -136,10 +139,11 @@ function master_evolution(
 end
 
 function _polarized_state(N::Int, direction::Symbol)
-    subspaces = dicke_subspaces(N)
-    state = direction === :up ? spinup(first(subspaces)) : spindown(first(subspaces))
-    zeros_in_other_sectors = [Ket(basis, zeros(ComplexF64, length(basis))) for basis in subspaces[2:end]]
-    return isempty(zeros_in_other_sectors) ? state : directsum(state, zeros_in_other_sectors...)
+    space = dicke_space(N)
+    state = direction === :up ? spinup(first(space.bases)) : spindown(first(space.bases))
+    data = zeros(ComplexF64, length(space))
+    data[first(block_ranges(space))] .= state.data
+    return Ket(space, data)
 end
 
 fully_excited_state(N::Int) = _polarized_state(N, :up)
