@@ -79,7 +79,7 @@ linewidth = spectrum_fwhm(ω, spectrum)
 The coherence label `(S,M)` means `|S,M-1><S,M|`.
 
 The original stochastic coherence unraveling is also available without the
-burn-in layer:
+sample-preparation layer:
 
 ```julia
 sample_times, stochastic_g1 = simulate_first_order_correlation_from_samples(
@@ -89,6 +89,29 @@ sample_times, stochastic_g1 = simulate_first_order_correlation_from_samples(
     times,
 )
 ```
+
+For the original one-long-trajectory ergodic preparation followed by the
+coherence ensemble:
+
+```julia
+result = ergodic_first_order_correlation(
+    model,
+    times;
+    nsamples = 10_000,
+    equilibration_time = 20.0,
+    sampling_window = 60.0,
+    rng,
+)
+
+result.samples.S
+result.samples.M
+result.samples.sample_times
+result.correlation
+```
+
+The stages remain independently accessible through
+`ergodic_population_samples` and
+`simulate_first_order_correlation_from_samples`.
 
 ## Full density matrix
 

@@ -29,6 +29,8 @@ These use only a single current `(S,M)` label per trajectory.
   linewidth.
 - `coherence_stochastic.jl` — stochastic coherence trajectories initialized
   from samples of the exact stationary population distribution.
+- `coherence_ergodic_pipeline.jl` — one long population trajectory, ergodic
+  stationary sampling, and the resulting stochastic coherence ensemble.
 
 ## 4. Full PI density matrix
 

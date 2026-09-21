@@ -228,3 +228,52 @@ function simulate_first_order_correlation_from_samples(
     correlation ./= length(S_samples)
     return collect(times), correlation
 end
+
+function simulate_first_order_correlation_from_samples(
+    model::DickeModel,
+    samples::ErgodicDickeSamples,
+    times;
+    rng::AbstractRNG = Random.default_rng(),
+)
+    return simulate_first_order_correlation_from_samples(
+        model,
+        samples.S,
+        samples.M,
+        times;
+        rng,
+    )
+end
+
+"""
+    ergodic_first_order_correlation(model, times; nsamples,
+                                    equilibration_time, ...)
+
+Complete stochastic pipeline: prepare stationary `(S,M)` seeds along one long
+population trajectory, propagate one first-order coherence trajectory from
+each seed, and average their contributions.
+"""
+function ergodic_first_order_correlation(
+    model::DickeModel,
+    times;
+    nsamples::Int,
+    equilibration_time::Real,
+    sampling_window::Real = 3 * equilibration_time,
+    initial_state::Tuple{Int,Int} = (model.N ÷ 2, model.N ÷ 2),
+    rng::AbstractRNG = Random.default_rng(),
+)
+    samples = ergodic_population_samples(
+        model,
+        nsamples;
+        equilibration_time,
+        sampling_window,
+        initial_state,
+        rng,
+    )
+    output_times, correlation = simulate_first_order_correlation_from_samples(
+        model,
+        samples,
+        times;
+        rng,
+    )
+    return (; times = output_times, correlation, samples)
+end

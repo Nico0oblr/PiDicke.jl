@@ -81,6 +81,32 @@ using Test
         )
         @test length(stochastic) == 11
         @test stochastic[1] == A_JM_minus(2, 2)^2
+
+        samples = ergodic_population_samples(
+            model,
+            20;
+            equilibration_time = 1.0,
+            sampling_window = 2.0,
+            rng = Xoshiro(1234),
+        )
+        @test length(samples) == 20
+        @test all(samples.sample_times .>= 1.0)
+        @test all(samples.sample_times .<= 3.0)
+        @test all(index -> begin
+            S, M = samples.S[index], samples.M[index]
+            0 <= S <= 2 && abs(M) <= S
+        end, eachindex(samples.S))
+
+        pipeline = ergodic_first_order_correlation(
+            model,
+            range(0.0, 1.0, length = 11);
+            nsamples = 20,
+            equilibration_time = 1.0,
+            sampling_window = 2.0,
+            rng = Xoshiro(1234),
+        )
+        @test length(pipeline.samples) == 20
+        @test length(pipeline.correlation) == 11
     end
 
     @testset "full density representation" begin

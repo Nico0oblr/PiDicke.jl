@@ -18,6 +18,21 @@ end
 PopulationEventBuffer(max_events::Int = 11) =
     PopulationEventBuffer(zeros(max_events), zeros(Int, max_events), zeros(Int, max_events), 0)
 
+"""Stationary Dicke-state samples collected along one population trajectory."""
+struct ErgodicDickeSamples
+    S::Vector{Int}
+    M::Vector{Int}
+    sample_times::Vector{Float64}
+
+    function ErgodicDickeSamples(S, M, sample_times)
+        length(S) == length(M) == length(sample_times) ||
+            throw(DimensionMismatch("S, M, and sample_times must have equal length"))
+        return new(collect(Int, S), collect(Int, M), collect(Float64, sample_times))
+    end
+end
+
+Base.length(samples::ErgodicDickeSamples) = length(samples.S)
+
 @inline _valid_population_state(S::Int, M::Int, Jmax::Int) =
     0 <= S <= Jmax && abs(M) <= S
 
@@ -165,4 +180,87 @@ function simulate_population_ensemble(
     end
     average ./= ntrajectories
     return grid, average
+end
+
+"""
+    ergodic_population_samples(model, nsamples; equilibration_time,
+                               sampling_window=3equilibration_time, ...)
+
+Collect stationary `(S,M)` samples from one long Gillespie trajectory. Random
+observation times are drawn after `equilibration_time`, sorted, and filled by
+the state occupied between successive jumps. This is the tested ergodic
+sampler from `PopulationMC.jl`, exposed without additional burn-in variants.
+"""
+function ergodic_population_samples(
+    model::DickeModel,
+    nsamples::Int;
+    equilibration_time::Real,
+    sampling_window::Real = 3 * equilibration_time,
+    initial_state::Tuple{Int,Int} = (model.N ÷ 2, model.N ÷ 2),
+    rng::AbstractRNG = Random.default_rng(),
+)
+    _require_even_N(model, TrajectoryRepresentation())
+    nsamples > 0 || throw(ArgumentError("nsamples must be positive"))
+    equilibration_time >= 0 || throw(ArgumentError("equilibration_time must be nonnegative"))
+    sampling_window > 0 || throw(ArgumentError("sampling_window must be positive"))
+
+    S0, M0 = initial_state
+    _valid_population_state(S0, M0, model.N ÷ 2) || throw(ArgumentError("invalid initial state"))
+
+    sample_times = Float64(equilibration_time) .+
+        rand(rng, nsamples) .* Float64(sampling_window)
+    permutation = sortperm(sample_times)
+    sorted_times = sample_times[permutation]
+    sorted_S = Vector{Int}(undef, nsamples)
+    sorted_M = Vector{Int}(undef, nsamples)
+
+    state = PopulationState(S0, M0, 0.0)
+    buffer = PopulationEventBuffer()
+    sample_index = 1
+
+    while sample_index <= nsamples
+        _build_population_events!(buffer, model, state)
+        if buffer.n == 0
+            sorted_S[sample_index:end] .= state.S
+            sorted_M[sample_index:end] .= state.M
+            break
+        end
+
+        total_rate = sum(@view buffer.rates[1:buffer.n])
+        if total_rate <= 0
+            sorted_S[sample_index:end] .= state.S
+            sorted_M[sample_index:end] .= state.M
+            break
+        end
+
+        next_jump_time = state.t - log(rand(rng)) / total_rate
+        while sample_index <= nsamples && sorted_times[sample_index] < next_jump_time
+            sorted_S[sample_index] = state.S
+            sorted_M[sample_index] = state.M
+            sample_index += 1
+        end
+
+        threshold = rand(rng) * total_rate
+        accumulated = 0.0
+        selected = buffer.n
+        @inbounds for k in 1:buffer.n
+            accumulated += buffer.rates[k]
+            if threshold <= accumulated
+                selected = k
+                break
+            end
+        end
+        state.S += buffer.dS[selected]
+        state.M += buffer.dM[selected]
+        state.t = next_jump_time
+    end
+
+    # Preserve the original random draw order while keeping every state paired
+    # with its observation time.
+    inverse_permutation = invperm(permutation)
+    return ErgodicDickeSamples(
+        sorted_S[inverse_permutation],
+        sorted_M[inverse_permutation],
+        sorted_times[inverse_permutation],
+    )
 end

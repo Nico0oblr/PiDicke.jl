@@ -48,6 +48,8 @@ export dicke_triangle,
 
 export run_population_trajectory,
        simulate_population_ensemble,
+       ErgodicDickeSamples,
+       ergodic_population_samples,
        population_generator,
        population_initial_state,
        population_steady_state,
@@ -60,7 +62,8 @@ export first_order_coherence_basis,
        solve_first_order_coherences,
        first_order_correlation,
        simulate_first_order_coherence_trajectory,
-       simulate_first_order_correlation_from_samples
+       simulate_first_order_correlation_from_samples,
+       ergodic_first_order_correlation
 
 export build_dicke_operator,
        collective_operator,
